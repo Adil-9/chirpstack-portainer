@@ -1,0 +1,114 @@
+version: '3.8'  
+
+services:
+  postgres:
+    image: postgres:latest
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: postgres
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - chirpstack_postgres_entrypoint:/docker-entrypoint-initdb.d
+    configs:
+      - source: pg_extention
+        target: /docker-entrypoint-initdb.d/pg_extention.sh
+    ports:
+      - "5432:5432"
+    deploy:
+      mode: replicated
+      replicas: 1
+    networks:
+      - chirpstack_net
+
+  chirpstack:
+    image: chirpstack/chirpstack
+    ports:
+      - "8080:8080"
+    environment:
+      LOG_LEVEL: info
+      PG_USERNAME: postgres
+      PG_PASSWORD: postgres
+      PG_HOSTNAME: postgres
+      PG_DATABASE: postgres
+      PG_SSLMODE: disable
+      PG_MAX_OPEN_CONNECTIONS: 10
+      PG_MIN_IDLE_CONNECTIONS: 0
+      REDIS_HOST: redis
+      REDIS_TLS_ENABLED: 'false'
+      REDIS_CLUSTER_ENABLED: 'false'
+      NETWORK_ID_HEX: "000000"
+      API_INTERFACE: 0.0.0.0
+      API_PORT: 8080
+      API_SECRET: you-must-replace-this
+      MQTT_BROKER_HOST: mosquitto
+      MQTT_PORT: 1883
+    volumes:
+      - chirpstack_data:/data
+      - chirpstack_config:/etc/chirpstack
+    depends_on:
+      - postgres
+      - redis
+      - mosquitto
+    configs:
+      - source: chirpstack_config_vars
+        target: /etc/chirpstack/chirpstack.toml
+    command: ["--config", "/etc/chirpstack"]
+    networks:
+      - chirpstack_net
+
+  redis:
+    image: redis:latest
+    ports:
+      - "6379:6379"
+    volumes:
+      - redisdata:/data
+    networks:
+      - chirpstack_net
+
+  mosquitto:
+    image: eclipse-mosquitto:latest
+    ports:
+      - "1883:1883"
+    volumes:
+      - mosquitto_data:/mosquitto/data
+      - mosquitto_config:/mosquitto/config
+      - mosquitto_log:/mosquitto/log
+    configs:
+      - source: mqtt_config
+        target: /mosquitto/config/mosquitto.conf
+    networks:
+      - chirpstack_net
+
+volumes:
+  chirpstack_data:
+    driver: local
+  chirpstack_config:
+    driver: local
+  postgres_data:
+    driver: local
+  chirpstack_postgres_entrypoint:
+    driver: local
+  mosquitto_data:
+    driver: local
+  mosquitto_config:
+    driver: local
+  mosquitto_log:
+    driver: local
+  redisdata:
+    driver: local
+
+
+
+configs:
+  chirpstack_config_vars:
+    external: true
+  pg_extention:
+    external: true
+  mqtt_config:
+    external: true
+
+
+networks:
+  chirpstack_net:
+    external: true
